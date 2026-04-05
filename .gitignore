@@ -1,0 +1,16 @@
+# West workspace — ignore build artifacts and personal config
+build*/
+.west/
+*.pyc
+__pycache__/
+
+# Signing keys — NEVER commit production keys
+signing/keys/*.pem
+signing/keys/*.key
+signing/keys/*.der
+!signing/keys/README.txt
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp

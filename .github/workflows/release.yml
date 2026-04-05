@@ -1,0 +1,304 @@
+name: AkiraConsole Firmware Release
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggers:
+#   • Push of a version tag  → builds + signs + publishes a GitHub Release
+#   • Pull requests           → build-only CI (no signing, no release)
+#   • Manual dispatch         → build-only (for branch testing)
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create GitHub Releases and upload assets
+
+env:
+  ZEPHYR_SDK_VERSION: "0.17.4"
+  ZEPHYR_SDK_DIR: /opt/toolchains/zephyr-sdk-0.17.4
+  BOARD: akiraconsole/esp32s3/procpu
+  BUILD_DIR: build-akiraconsole
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: Build & sign the firmware
+  # ─────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build & Sign Firmware
+    runs-on: ubuntu-latest
+
+    outputs:
+      firmware_version: ${{ steps.version.outputs.version }}
+
+    steps:
+      # ── 0. Free disk space (GitHub runners have ~14 GB; Zephyr needs ~10 GB) ──
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo docker system prune -af || true
+          df -h
+
+      # ── 1. Checkout firmware repo ──────────────────────────────────────────
+      - name: Checkout AkiraConsole-Firmware
+        uses: actions/checkout@v4
+        with:
+          path: akiraconsole-firmware
+          fetch-depth: 0        # full history — needed for version tags
+
+      # ── 2. Extract version from tag or VERSION file ────────────────────────
+      - name: Set firmware version
+        id: version
+        working-directory: akiraconsole-firmware
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Firmware version: $VERSION"
+
+      # ── 3. Start the official Zephyr CI container ──────────────────────────
+      - name: Pull Zephyr CI container
+        run: |
+          docker pull ghcr.io/zephyrproject-rtos/ci:latest
+          docker run -d --name zephyr-ci \
+            -v $PWD:/workspace \
+            -w /workspace \
+            --user root \
+            ghcr.io/zephyrproject-rtos/ci:latest \
+            tail -f /dev/null
+
+      # ── 4. West init (points at this firmware repo as the manifest) ────────
+      - name: West init & update
+        run: |
+          docker exec -w /workspace/akiraconsole-firmware zephyr-ci \
+            bash -c "west init -l . && west update"
+
+      # ── 5. Install / cache the Zephyr toolchain ───────────────────────────
+      - name: Install Zephyr SDK
+        run: |
+          docker exec \
+            -e ZEPHYR_SDK_INSTALL_DIR=${{ env.ZEPHYR_SDK_DIR }} \
+            -e ZEPHYR_TOOLCHAIN_VARIANT=zephyr \
+            -w /workspace/akiraconsole-firmware zephyr-ci bash -c '
+              if [ ! -f "$ZEPHYR_SDK_INSTALL_DIR/sdk_version" ]; then
+                echo "Installing Zephyr SDK ${{ env.ZEPHYR_SDK_VERSION }}..."
+                wget -q https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${{ env.ZEPHYR_SDK_VERSION }}/zephyr-sdk-${{ env.ZEPHYR_SDK_VERSION }}_linux-x86_64.tar.xz
+                mkdir -p /opt/toolchains
+                tar xf zephyr-sdk-${{ env.ZEPHYR_SDK_VERSION }}_linux-x86_64.tar.xz -C /opt/toolchains
+                /opt/toolchains/zephyr-sdk-${{ env.ZEPHYR_SDK_VERSION }}/setup.sh -t all -h -c
+              else
+                echo "Zephyr SDK already cached."
+              fi
+            '
+
+      # ── 6. Export Zephyr CMake package ────────────────────────────────────
+      - name: Zephyr env export
+        run: |
+          docker exec \
+            -e ZEPHYR_SDK_INSTALL_DIR=${{ env.ZEPHYR_SDK_DIR }} \
+            -e ZEPHYR_TOOLCHAIN_VARIANT=zephyr \
+            -w /workspace/akiraconsole-firmware zephyr-ci \
+            west zephyr-export
+
+      # ── 7. Fetch ESP32 HAL blobs (binary WiFi/BT firmware) ────────────────
+      - name: Fetch ESP32 HAL blobs
+        run: |
+          docker exec -w /workspace/akiraconsole-firmware zephyr-ci \
+            west blobs fetch hal_espressif
+
+      # ── 8. Build MCUboot bootloader ───────────────────────────────────────
+      - name: Build MCUboot
+        run: |
+          docker exec \
+            -e ZEPHYR_SDK_INSTALL_DIR=${{ env.ZEPHYR_SDK_DIR }} \
+            -e ZEPHYR_TOOLCHAIN_VARIANT=zephyr \
+            -w /workspace/akiraconsole-firmware zephyr-ci \
+            west build --pristine \
+              -b ${{ env.BOARD }} \
+              bootloader/mcuboot/boot/zephyr \
+              -d build-mcuboot \
+              -- \
+              -DBOARD_ROOT=/workspace/akiraconsole-firmware \
+              -DDTS_ROOT=/workspace/akiraconsole-firmware \
+              -DEXTRA_DTC_OVERLAY_FILE=/workspace/akiraconsole-firmware/boards/akiraconsole_esp32s3_procpu.overlay
+
+      # ── 9. Build AkiraConsole application ────────────────────────────────
+      - name: Build AkiraConsole firmware
+        run: |
+          docker exec \
+            -e ZEPHYR_SDK_INSTALL_DIR=${{ env.ZEPHYR_SDK_DIR }} \
+            -e ZEPHYR_TOOLCHAIN_VARIANT=zephyr \
+            -w /workspace/akiraconsole-firmware zephyr-ci \
+            west build --pristine \
+              -b ${{ env.BOARD }} \
+              /workspace/akiraconsole-firmware \
+              -d ${{ env.BUILD_DIR }} \
+              -- \
+              -DMODULE_EXT_ROOT=/workspace/akiraos
+
+      # ── 10. Sign app image with MCUboot (imgtool) ──────────────────────────
+      #
+      # Signing produces `zephyr.signed.bin` — the image MCUboot will verify
+      # on every boot.  The private key is injected from GitHub Secrets so it
+      # is never stored in the repository.
+      #
+      # Secret:  FIRMWARE_SIGNING_KEY  (PEM, EC P-256, imgtool format)
+      #          Generate locally:  imgtool keygen -k mykey.pem -t ecdsa-p256
+      #          Then add as repo secret in Settings → Secrets → Actions.
+      #
+      # On PRs / manual dispatch the secret is not available; we fall back to
+      # signing with a throwaway dev key so the artifact still builds cleanly.
+      # ─────────────────────────────────────────────────────────────────────
+      - name: Sign firmware image
+        env:
+          FIRMWARE_SIGNING_KEY: ${{ secrets.FIRMWARE_SIGNING_KEY }}
+        run: |
+          docker exec \
+            -e FIRMWARE_SIGNING_KEY="$FIRMWARE_SIGNING_KEY" \
+            -w /workspace/akiraconsole-firmware zephyr-ci \
+            bash -c '
+              pip install imgtool --quiet
+
+              KEY_FILE="/tmp/signing_key.pem"
+
+              if [ -n "$FIRMWARE_SIGNING_KEY" ]; then
+                echo "$FIRMWARE_SIGNING_KEY" > "$KEY_FILE"
+                echo "Using production signing key from secret."
+              else
+                echo "⚠ No FIRMWARE_SIGNING_KEY secret — generating throwaway dev key."
+                imgtool keygen -k "$KEY_FILE" -t ecdsa-p256
+              fi
+
+              imgtool sign \
+                --key "$KEY_FILE" \
+                --header-size 0x20 \
+                --align 4 \
+                --version ${{ steps.version.outputs.firmware_version || "0.0.0" }} \
+                --slot-size 0x200000 \
+                ${{ env.BUILD_DIR }}/zephyr/zephyr.bin \
+                ${{ env.BUILD_DIR }}/zephyr/zephyr.signed.bin
+
+              rm -f "$KEY_FILE"
+              echo "Signed image: $(ls -lh ${{ env.BUILD_DIR }}/zephyr/zephyr.signed.bin)"
+            '
+
+      # ── 11. Collect release artifacts ─────────────────────────────────────
+      - name: Collect artifacts
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          OUTDIR=/tmp/release-artifacts
+          mkdir -p "$OUTDIR"
+
+          # Signed application image (goes to slot0 at 0x20000)
+          cp ${{ env.BUILD_DIR }}/zephyr/zephyr.signed.bin \
+             "$OUTDIR/akiraconsole-firmware-${VERSION}.signed.bin"
+
+          # MCUboot bootloader (flashed once at 0x0)
+          cp build-mcuboot/zephyr/zephyr.bin \
+             "$OUTDIR/akiraconsole-mcuboot-${VERSION}.bin"
+
+          # ELF + map for debugging / symbol lookup
+          cp ${{ env.BUILD_DIR }}/zephyr/zephyr.elf \
+             "$OUTDIR/akiraconsole-firmware-${VERSION}.elf"
+
+          # SHA-256 checksums for integrity verification
+          cd "$OUTDIR"
+          sha256sum *.bin *.elf > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # ── 12. Upload artifacts (available for all runs, not just releases) ───
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: akiraconsole-firmware-${{ steps.version.outputs.version }}
+          path: /tmp/release-artifacts/
+          retention-days: 30
+
+      # ── 13. Clean up container ─────────────────────────────────────────────
+      - name: Stop container
+        if: always()
+        run: |
+          docker stop zephyr-ci || true
+          docker rm  zephyr-ci  || true
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Publish GitHub Release (tag pushes only)
+  # ─────────────────────────────────────────────────────────────────────────
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout (for release notes)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: akiraconsole-firmware-${{ needs.build.outputs.firmware_version }}
+          path: release-artifacts
+
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          VERSION=${{ needs.build.outputs.firmware_version }}
+          # Extract section between current tag and previous tag from CHANGELOG.md
+          NOTES=$(awk "/^## \[?${VERSION}\]?/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="See [CHANGELOG.md](CHANGELOG.md) for details."
+          fi
+          # Write multiline to output
+          {
+            echo 'notes<<EOF'
+            echo "$NOTES"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.firmware_version }}
+          name: "AkiraConsole Firmware ${{ needs.build.outputs.firmware_version }}"
+          body: |
+            ## AkiraConsole Firmware ${{ needs.build.outputs.firmware_version }}
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+            ### Flashing instructions
+
+            **First-time flash** (MCUboot + firmware):
+            ```bash
+            esptool --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+              write_flash \
+              0x0     akiraconsole-mcuboot-${{ needs.build.outputs.firmware_version }}.bin \
+              0x20000 akiraconsole-firmware-${{ needs.build.outputs.firmware_version }}.signed.bin
+            ```
+
+            **OTA / app-only update** (MCUboot already flashed):
+            ```bash
+            esptool --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+              write_flash 0x20000 \
+              akiraconsole-firmware-${{ needs.build.outputs.firmware_version }}.signed.bin
+            ```
+
+            ⚠️ Do **not** use `--erase` — it wipes NVS settings and installed WASM apps.
+
+            Verify file integrity with `SHA256SUMS.txt` before flashing.
+          draft: false
+          prerelease: ${{ contains(needs.build.outputs.firmware_version, '-') }}
+          files: |
+            release-artifacts/akiraconsole-firmware-${{ needs.build.outputs.firmware_version }}.signed.bin
+            release-artifacts/akiraconsole-mcuboot-${{ needs.build.outputs.firmware_version }}.bin
+            release-artifacts/akiraconsole-firmware-${{ needs.build.outputs.firmware_version }}.elf
+            release-artifacts/SHA256SUMS.txt

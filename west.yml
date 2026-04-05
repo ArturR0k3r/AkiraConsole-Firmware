@@ -1,0 +1,20 @@
+manifest:
+  projects:
+    # AkiraOS — the embedded platform (OS, drivers, WAMR runtime, native APIs).
+    # Pin to a specific tag so firmware builds are always reproducible.
+    - name: akiraos
+      url: https://github.com/ArturR0k3r/AkiraOS
+      revision: v1.4.10  # AkiraOS release tag
+      path: akiraos
+
+    # Zephyr — imported transitively through AkiraOS west.yml so you get the
+    # exact Zephyr revision that AkiraOS was tested against.  Do NOT pin a
+    # separate Zephyr here; let AkiraOS own the Zephyr version.
+    - name: zephyr
+      url: https://github.com/zephyrproject-rtos/zephyr
+      revision: v4.3.0
+      west-commands: scripts/west-commands.yml
+      import: true
+
+  self:
+    path: akiraconsole-firmware
