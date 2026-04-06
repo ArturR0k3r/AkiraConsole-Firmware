@@ -158,9 +158,11 @@ jobs:
       - name: Sign firmware image
         env:
           FIRMWARE_SIGNING_KEY: ${{ secrets.FIRMWARE_SIGNING_KEY }}
+          SIGN_VERSION: ${{ steps.version.outputs.firmware_version || '0.0.0' }}
         run: |
           docker exec \
             -e FIRMWARE_SIGNING_KEY="$FIRMWARE_SIGNING_KEY" \
+            -e SIGN_VERSION="$SIGN_VERSION" \
             -w /workspace/akiraconsole-firmware zephyr-ci \
             bash -c '
               pip install imgtool --quiet
@@ -179,7 +181,7 @@ jobs:
                 --key "$KEY_FILE" \
                 --header-size 0x20 \
                 --align 4 \
-                --version ${{ steps.version.outputs.firmware_version || "0.0.0" }} \
+                --version "$SIGN_VERSION" \
                 --slot-size 0x200000 \
                 ${{ env.BUILD_DIR }}/zephyr/zephyr.bin \
                 ${{ env.BUILD_DIR }}/zephyr/zephyr.signed.bin
