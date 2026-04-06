@@ -77,7 +77,7 @@ jobs:
       - name: West init & update
         run: |
           docker exec -w /workspace/akiraconsole-firmware zephyr-ci \
-            bash -c "west init -l . && west update"
+            bash -c "west init -l . && west config manifest.group-filter -- +bootloader && west update"
 
       # ── 5. Install / cache the Zephyr toolchain ───────────────────────────
       - name: Install Zephyr SDK
@@ -121,7 +121,7 @@ jobs:
             -w /workspace/akiraconsole-firmware zephyr-ci \
             west build --pristine \
               -b ${{ env.BOARD }} \
-              bootloader/mcuboot/boot/zephyr \
+              /workspace/bootloader/mcuboot/boot/zephyr \
               -d build-mcuboot \
               -- \
               -DBOARD_ROOT=/workspace/akiraconsole-firmware \
