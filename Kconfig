@@ -2,6 +2,9 @@
 #
 # AkiraConsole Firmware — root Kconfig
 #
-# Sources AkiraOS Kconfig tree (which itself sources Kconfig.zephyr),
-# making all AKIRA_* symbols available to the firmware config files.
+# 1. Sources AkiraOS Kconfig tree (which itself sources Kconfig.zephyr),
+#    making all AKIRA_* symbols available to the firmware config files.
+# 2. Sources the product-level Kconfig so console-specific symbols
+#    (AKIRA_CONSOLE_*) are visible in menuconfig and .conf files.
 rsource "../akiraos/Kconfig"
+rsource "src/Kconfig"

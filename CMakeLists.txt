@@ -25,3 +25,14 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../akiraos/CMakeLists.txt")
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../akiraos"
                    "${CMAKE_CURRENT_BINARY_DIR}/akiraos")
 endif()
+
+# ── AkiraConsole product-specific sources ──────────────────────────────────
+# These files live in this repo and can be freely modified without touching
+# AkiraOS.  Add new console-specific features here.
+target_sources(app PRIVATE
+  src/console_board.c
+)
+
+target_include_directories(app PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/src
+)

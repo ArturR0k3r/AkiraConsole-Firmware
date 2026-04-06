@@ -166,7 +166,7 @@ jobs:
       - name: Sign firmware image
         env:
           FIRMWARE_SIGNING_KEY: ${{ secrets.FIRMWARE_SIGNING_KEY }}
-          SIGN_VERSION: ${{ steps.version.outputs.firmware_version || '0.0.0' }}
+          SIGN_VERSION: ${{ steps.version.outputs.version || '0.0.0' }}
         run: |
           docker exec \
             -e FIRMWARE_SIGNING_KEY="$FIRMWARE_SIGNING_KEY" \

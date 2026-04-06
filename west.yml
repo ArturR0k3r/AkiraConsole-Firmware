@@ -1,20 +1,18 @@
 manifest:
   projects:
     # AkiraOS — the embedded platform (OS, drivers, WAMR runtime, native APIs).
-    # Pin to a specific tag so firmware builds are always reproducible.
+    # Track the C0ns0l3-Firmware branch which is the validated working branch
+    # for the AkiraConsole hardware.  Swap this for a release tag (e.g.
+    # v1.4.10) once that tag is cut and CI is green.
+    #
+    # import: true  →  west reads AkiraOS/west.yml and pulls in Zephyr v4.3.0
+    # plus all its HAL modules transitively.  This is the T2 manifest topology:
+    # AkiraConsole-Firmware owns the entry-point; AkiraOS owns the Zephyr pin.
     - name: akiraos
       url: https://github.com/ArturR0k3r/AkiraOS
-      revision: v1.4.10  # AkiraOS release tag
+      revision: C0ns0l3-Firmware
       path: akiraos
-
-    # Zephyr — imported transitively through AkiraOS west.yml so you get the
-    # exact Zephyr revision that AkiraOS was tested against.  Do NOT pin a
-    # separate Zephyr here; let AkiraOS own the Zephyr version.
-    - name: zephyr
-      url: https://github.com/zephyrproject-rtos/zephyr
-      revision: v4.3.0
-      west-commands: scripts/west-commands.yml
-      import: true
+      import: true   # brings in Zephyr + HALs from AkiraOS/west.yml
 
   self:
     path: akiraconsole-firmware

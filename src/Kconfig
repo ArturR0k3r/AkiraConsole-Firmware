@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# AkiraConsole product-level Kconfig
+#
+# Add symbols that are specific to the AkiraConsole *product* here.
+# Platform symbols (AkiraOS internals) live in akiraos/Kconfig.
+
+config AKIRA_CONSOLE_PRODUCT_NAME
+	string "Product name shown in logs and shell banner"
+	default "AkiraConsole"
+	help
+	  Short human-readable name logged at boot and optionally shown on the
+	  idle screen.  Change this for custom hardware variants (e.g. "AkiraConsole Pro").
+
+config AKIRA_CONSOLE_BOOT_BUTTON_WIFI_PROV
+	bool "Boot-button WiFi provisioning shortcut"
+	default y
+	depends on WIFI
+	help
+	  When the BOOT button (GPIO0) is held at power-on, raise a flag that
+	  requests WiFi provisioning mode.  The AkiraOS connectivity layer reads
+	  this flag and opens a provisioning AP / captive portal instead of
+	  connecting to the saved SSID.
