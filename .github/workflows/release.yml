@@ -79,6 +79,12 @@ jobs:
           docker exec -w /workspace/akiraconsole-firmware zephyr-ci \
             bash -c "west init -l . && west config manifest.group-filter -- +bootloader && west update"
 
+      # ── 4b. Init AkiraOS git submodules (WAMR + AkiraSDK) ─────────────────
+      - name: Init AkiraOS submodules
+        run: |
+          docker exec -w /workspace/akiraos zephyr-ci \
+            git submodule update --init --recursive
+
       # ── 5. Install / cache the Zephyr toolchain ───────────────────────────
       - name: Install Zephyr SDK
         run: |
