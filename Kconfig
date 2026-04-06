@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# AkiraConsole Firmware — root Kconfig
+#
+# Sources AkiraOS Kconfig tree (which itself sources Kconfig.zephyr),
+# making all AKIRA_* symbols available to the firmware config files.
+rsource "../akiraos/Kconfig"

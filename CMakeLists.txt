@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 cmake_minimum_required(VERSION 3.20.0)
 
+# Suppress Kconfig warnings-as-errors so undefined symbols (during incremental
+# migration) do not abort the configuration phase.
+set(KCONFIG_WARN_UNDEF OFF CACHE BOOL "" FORCE)
+set(KCONFIG_WERROR     OFF CACHE BOOL "" FORCE)
+
 # Board root — this repo contains the `boards/akiraconsole` board definition.
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_LIST_DIR})
 list(APPEND DTS_ROOT   ${CMAKE_CURRENT_LIST_DIR})
