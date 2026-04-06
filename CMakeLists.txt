@@ -17,8 +17,5 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(akiraconsole_firmware VERSION 1.4.9)
 
 # AkiraOS application sources are provided by the platform repo.
-# CMAKE_CURRENT_SOURCE_DIR must point at the AkiraOS directory before include()
-# so that all target_sources() relative paths inside AkiraOS CMakeLists.txt
-# resolve to /workspace/akiraos/src/... instead of the firmware source dir.
-set(CMAKE_CURRENT_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../akiraos")
+# We include them via their CMakeLists.txt rather than duplicating source lists.
 include(${CMAKE_CURRENT_LIST_DIR}/../akiraos/CMakeLists.txt OPTIONAL)
