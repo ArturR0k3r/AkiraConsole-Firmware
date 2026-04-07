@@ -10,9 +10,7 @@ set(KCONFIG_WERROR     OFF CACHE BOOL "" FORCE)
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_LIST_DIR})
 list(APPEND DTS_ROOT   ${CMAKE_CURRENT_LIST_DIR})
 
-# AkiraOS is fetched by west into the `akiraos/` sub-directory.
-# MODULE_EXT_ROOT is set on the command-line by the CI workflow and build.sh
-# so WAMR and other out-of-tree modules are found correctly.
+# AkiraOS is fetched by west into the `akiraos/` sub-directory next to this repo.
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(akiraconsole_firmware VERSION 1.4.9)
 
@@ -43,6 +41,14 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     ${_wamr}/core/shared/mem-alloc          # mem_alloc.h
     ${_wamr}/core/shared/utils              # bh_common.h, bh_log.h
     ${_wamr}/core/shared/utils/uncommon     # bh_assert.h variants
+  )
+  # platform_internal.h defines zephyr_fs_desc using struct fs_file_t / fs_dir_t
+  # (Zephyr FS types from <zephyr/fs/fs_interface.h>).  When WAMR_BUILD_LIBC_WASI=0
+  # zephyr_file.c — the only file that would pull in fs_interface.h — is excluded
+  # from the build, leaving those types incomplete for every other translation unit.
+  # Force-include the header so all app TUs see the complete struct definitions.
+  target_compile_options(app PRIVATE
+    "-include" "zephyr/fs/fs_interface.h"
   )
 endif()
 

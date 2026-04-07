@@ -124,7 +124,6 @@ jobs:
           docker exec \
             -e ZEPHYR_SDK_INSTALL_DIR=${{ env.ZEPHYR_SDK_DIR }} \
             -e ZEPHYR_TOOLCHAIN_VARIANT=zephyr \
-            -e ZEPHYR_BASE=/workspace/zephyr \
             -w /workspace/akiraconsole-firmware zephyr-ci \
             west build --pristine \
               -b ${{ env.BOARD }} \
@@ -141,14 +140,11 @@ jobs:
           docker exec \
             -e ZEPHYR_SDK_INSTALL_DIR=${{ env.ZEPHYR_SDK_DIR }} \
             -e ZEPHYR_TOOLCHAIN_VARIANT=zephyr \
-            -e ZEPHYR_BASE=/workspace/zephyr \
             -w /workspace/akiraconsole-firmware zephyr-ci \
             west build --pristine \
               -b ${{ env.BOARD }} \
-              /workspace/akiraconsole-firmware \
-              -d ${{ env.BUILD_DIR }} \
-              -- \
-              -DMODULE_EXT_ROOT=/workspace/akiraos
+              . \
+              -d ${{ env.BUILD_DIR }}
 
       # ── 10. Sign app image with MCUboot (imgtool) ──────────────────────────
       #
