@@ -38,7 +38,8 @@ endif()
 if(CONFIG_AKIRA_WASM_RUNTIME)
   set(_wamr "${CMAKE_CURRENT_LIST_DIR}/../akiraos/modules/wasm-micro-runtime")
   target_include_directories(app PRIVATE
-    ${_wamr}/core/shared/platform/include   # platform_api_vmcore.h, bh_platform.h
+    ${_wamr}/core/shared/platform/include   # platform_api_vmcore.h, platform_common.h
+    ${_wamr}/core/shared/platform/zephyr    # platform_internal.h (included by platform_common.h)
     ${_wamr}/core/shared/mem-alloc          # mem_alloc.h
     ${_wamr}/core/shared/utils              # bh_common.h, bh_log.h
     ${_wamr}/core/shared/utils/uncommon     # bh_assert.h variants
