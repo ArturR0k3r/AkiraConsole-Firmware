@@ -26,6 +26,25 @@ if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../akiraos/CMakeLists.txt")
                    "${CMAKE_CURRENT_BINARY_DIR}/akiraos")
 endif()
 
+# ── WAMR include-path fix ───────────────────────────────────────────────────
+# WAMR's runtime_lib.cmake registers its headers via directory-scoped
+# include_directories().  When AkiraOS is pulled in via add_subdirectory()
+# those directory-scoped includes are confined to the akiraos/ CMake scope
+# and do NOT propagate to the parent (firmware) scope where 'app' target
+# sources are actually compiled.  The result is fatal missing-header errors
+# for platform_api_vmcore.h, bh_platform.h, and friends.
+# Fix: explicitly add every WAMR include dir that runtime_lib.cmake would
+# have registered globally in a standalone AkiraOS build.
+if(CONFIG_AKIRA_WASM_RUNTIME)
+  set(_wamr "${CMAKE_CURRENT_LIST_DIR}/../akiraos/modules/wasm-micro-runtime")
+  target_include_directories(app PRIVATE
+    ${_wamr}/core/shared/platform/include   # platform_api_vmcore.h, bh_platform.h
+    ${_wamr}/core/shared/mem-alloc          # mem_alloc.h
+    ${_wamr}/core/shared/utils              # bh_common.h, bh_log.h
+    ${_wamr}/core/shared/utils/uncommon     # bh_assert.h variants
+  )
+endif()
+
 # ── AkiraConsole product-specific sources ──────────────────────────────────
 # These files live in this repo and can be freely modified without touching
 # AkiraOS.  Add new console-specific features here.
